@@ -269,7 +269,8 @@ def main() -> None: # pragma: no cover
     longueur_sequence = len(sequence)
     probable_genes_comp_corrected = [[longueur_sequence - stop + 1, longueur_sequence - start + 1]
                                      for start, stop in probable_genes_comp]
-    
+                                     
+    #Concaténation des listes de gènes prédits
     probable_genes_predict_total = probable_genes + probable_genes_comp_corrected
 
     # Call to output functions
