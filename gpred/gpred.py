@@ -255,7 +255,7 @@ def main() -> None: # pragma: no cover
     args = get_arguments()
     # Let us do magic in 5' to 3'
     sequence = read_fasta(args.genome_file)
-    #Prédicition 
+    #Prédicition des gènes dans le sens 5' -> 3'
     probable_genes = predict_genes(sequence, start_regex, stop_regex, shine_regex, 
                                    args.min_gene_len, args.max_shine_dalgarno_distance, args.min_gap)
 
