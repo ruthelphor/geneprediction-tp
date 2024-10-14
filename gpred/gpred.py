@@ -1,3 +1,8 @@
+#!/bin/env python3
+# -*- coding: utf-8 -*-
+"""This module contains functions for predicting genes in a genome sequence
+ and writing the results to a file."""
+
 import argparse
 import sys
 import os
@@ -6,7 +11,10 @@ import re
 import textwrap
 from re import Pattern
 from pathlib import Path
-from typing import List, Union, Optional
+from typing import List, Union
+
+__author__ = "Yves Yamadjako"
+__copyright__ = "Universite Paris Cité"
 
 
 def isfile(path: str) -> Path:  # pragma: no cover
@@ -81,8 +89,7 @@ def find_start(start_regex: Pattern, sequence: str, start: int, stop: int) -> Un
     match_object = start_regex.search(sequence, start, stop)
     if match_object:
         return match_object.start(0)
-    else:
-        return None    
+    return None    
 
 
 
@@ -146,28 +153,35 @@ def predict_genes(sequence: str, start_regex: Pattern, stop_regex: Pattern, shin
     position_courante = 0
     longueur_sequence = len(sequence)
 
+    # Boucle de recherche de gènes tant que la séquence a assez de nucléotides pour respecter min_gap
     while longueur_sequence - position_courante >= min_gap:
-        # Trouver un codon d'initiation à partir de la position courante
+        
+        # Trouver un codon start à partir de la position courante
         start = find_start(start_regex, sequence, position_courante, longueur_sequence)
 
-        if start is not None:
+        if start is not None:  # Si un codon start est trouvé
             # Trouver un codon stop à partir du codon start
             stop = find_stop(stop_regex, sequence, start)
 
-            if stop is not None and (stop - start + 1) >= min_gene_len:
-                # Vérifier la présence d'une séquence de Shine-Dalgarno
-                if has_shine_dalgarno(shine_regex, sequence, start, max_shine_dalgarno_distance):
-                    # Gène probable trouvé, ajouter aux gènes prédites
-                    predicted_genes.append([start + 1, stop + 3])  # Positions basées sur index 1 et codon stop inclus
-                    position_courante = stop + 3 + min_gap
+            if stop is not None:  # Si un codon stop est trouvé
+                # Vérifier si le gène répond au critère de longueur minimale
+                if (stop - start + 1) >= min_gene_len:
+                    # Vérifier la présence d'une séquence Shine-Dalgarno en amont du codon start
+                    if has_shine_dalgarno(shine_regex, sequence, start, max_shine_dalgarno_distance):
+                        # Gène probable identifié, ajouter aux résultats
+                        predicted_genes.append([start + 1, stop + 3])
+                        position_courante = stop + 3 + min_gap  # Avancer après ce gène + min_gap
+                    else:
+                        position_courante += 1  # Si pas de Shine-Dalgarno, avancer d'une position
                 else:
-                    position_courante += 1
+                    position_courante += 1  # Si gène trop court, avancer d'une position
             else:
-                position_courante += 1
+                position_courante += 1  # Si pas de codon stop trouvé, avancer d'une position
         else:
-            position_courante += 1
+            position_courante += 1  # Si pas de codon start trouvé, avancer d'une position
 
     return predicted_genes
+
 
 
 def write_genes_pos(predicted_genes_file: Path, probable_genes: List[List[int]]) -> None:
@@ -200,12 +214,12 @@ def write_genes(fasta_file: Path, sequence: str, probable_genes: List[List[int]]
             for i,gene_pos in enumerate(probable_genes):
                 fasta.write(">gene_{0}{1}{2}{1}".format(
                     i+1, os.linesep, 
-                    fill(sequence[gene_pos[0]-1:gene_pos[1]])))
+                    textwrap.fill(sequence[gene_pos[0]-1:gene_pos[1]])))
             i = i+1
             for j,gene_pos in enumerate(probable_genes_comp):
                 fasta.write(">gene_{0}{1}{2}{1}".format(
                             i+1+j, os.linesep,
-                            fill(sequence_rc[gene_pos[0]-1:gene_pos[1]])))
+                            textwrap.fill(sequence_rc[gene_pos[0]-1:gene_pos[1]])))
     except IOError:
         sys.exit("Error cannot open {}".format(fasta_file))
 
@@ -216,8 +230,9 @@ def reverse_complement(sequence: str) -> str:
     :param sequence: (str) DNA Sequence.
     :return: (str) Reverse complemented sequence.
     """
-    complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'}
-    return ''.join([complement[base] for base in sequence[::-1]])
+    complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
+    return ''.join(complement[base] for base in reversed(sequence))
+
 
 
 #==============================================================
@@ -233,7 +248,7 @@ def main() -> None: # pragma: no cover
     stop_codons = ['TAA', 'TAG', 'TGA']
     start_regex = re.compile('AT[TG]|[ATCG]TG')
     stop_regex = re.compile('TA[GA]|TGA')
-    # Shine AGGAGGUAA
+    #Shine AGGAGGUAA
     #AGGA ou GGAGG 
     shine_regex = re.compile('A?G?GAGG|GGAG|GG.{1}GG')
     # Arguments
@@ -249,13 +264,16 @@ def main() -> None: # pragma: no cover
     # Prédiction des gènes dans le sens 3' -> 5'
     probable_genes_comp = predict_genes(sequence_rc, start_regex, stop_regex, shine_regex, 
                                         args.min_gene_len, args.max_shine_dalgarno_distance, args.min_gap)
+
     # Correction des positions des gènes prédits dans le sens 3' -> 5'
     longueur_sequence = len(sequence)
     probable_genes_comp_corrected = [[longueur_sequence - stop + 1, longueur_sequence - start + 1]
                                      for start, stop in probable_genes_comp]
+    
+    probable_genes_predict_total = probable_genes + probable_genes_comp_corrected
 
     # Call to output functions
-    write_genes_pos(args.predicted_genes_file, probable_genes)
+    write_genes_pos(args.predicted_genes_file, probable_genes_predict_total)
     write_genes(args.fasta_file, sequence, probable_genes, sequence_rc, probable_genes_comp_corrected)
 
 
