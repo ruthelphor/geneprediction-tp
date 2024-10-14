@@ -62,7 +62,7 @@ def read_fasta(fasta_file: Path) -> str:
     :return: (str) Sequence from the genome. 
     """
     with open(fasta_file, "r") as file:
-        sequence = []
+        sequence = ""
         for line in file:
             if not line.startswith(">"):
                 sequence += line.strip()
@@ -80,7 +80,7 @@ def find_start(start_regex: Pattern, sequence: str, start: int, stop: int) -> Un
     """
     match_object = start_regex.search(sequence, start, stop)
     if match_object:
-        return Union.start(0)
+        return match_object.start(0)
     else:
         return None    
 
@@ -142,7 +142,32 @@ def predict_genes(sequence: str, start_regex: Pattern, stop_regex: Pattern, shin
     :param min_gap: (int) Minimum distance between two genes.
     :return: (list) List of [start, stop] position of each predicted genes.
     """
-    pass
+    predicted_genes = []
+    position_courante = 0
+    longueur_sequence = len(sequence)
+
+    while longueur_sequence - position_courante >= min_gap:
+        # Trouver un codon d'initiation à partir de la position courante
+        start = find_start(start_regex, sequence, position_courante, longueur_sequence)
+
+        if start is not None:
+            # Trouver un codon stop à partir du codon start
+            stop = find_stop(stop_regex, sequence, start)
+
+            if stop is not None and (stop - start + 1) >= min_gene_len:
+                # Vérifier la présence d'une séquence de Shine-Dalgarno
+                if has_shine_dalgarno(shine_regex, sequence, start, max_shine_dalgarno_distance):
+                    # Gène probable trouvé, ajouter aux gènes prédites
+                    predicted_genes.append([start + 1, stop + 3])  # Positions basées sur index 1 et codon stop inclus
+                    position_courante = stop + 3 + min_gap
+                else:
+                    position_courante += 1
+            else:
+                position_courante += 1
+        else:
+            position_courante += 1
+
+    return predicted_genes
 
 
 def write_genes_pos(predicted_genes_file: Path, probable_genes: List[List[int]]) -> None:
@@ -204,8 +229,8 @@ def main() -> None: # pragma: no cover
     """
     # Gene detection over genome involves to consider a thymine instead of
     # an uracile that we would find on the expressed RNA
-    #start_codons = ['TTG', 'CTG', 'ATT', 'ATG', 'GTG']
-    #stop_codons = ['TAA', 'TAG', 'TGA']
+    start_codons = ['TTG', 'CTG', 'ATT', 'ATG', 'GTG']
+    stop_codons = ['TAA', 'TAG', 'TGA']
     start_regex = re.compile('AT[TG]|[ATCG]TG')
     stop_regex = re.compile('TA[GA]|TGA')
     # Shine AGGAGGUAA
@@ -214,14 +239,24 @@ def main() -> None: # pragma: no cover
     # Arguments
     args = get_arguments()
     # Let us do magic in 5' to 3'
-    
-    # Don't forget to uncomment !!!
-    # Call these function in the order that you want
+    sequence = read_fasta(args.genome_file)
+    #Prédicition 
+    probable_genes = predict_genes(sequence, start_regex, stop_regex, shine_regex, 
+                                   args.min_gene_len, args.max_shine_dalgarno_distance, args.min_gap)
+
     # We reverse and complement
-    #sequence_rc = reverse_complement(sequence)
+    sequence_rc = reverse_complement(sequence)
+    # Prédiction des gènes dans le sens 3' -> 5'
+    probable_genes_comp = predict_genes(sequence_rc, start_regex, stop_regex, shine_regex, 
+                                        args.min_gene_len, args.max_shine_dalgarno_distance, args.min_gap)
+    # Correction des positions des gènes prédits dans le sens 3' -> 5'
+    longueur_sequence = len(sequence)
+    probable_genes_comp_corrected = [[longueur_sequence - stop + 1, longueur_sequence - start + 1]
+                                     for start, stop in probable_genes_comp]
+
     # Call to output functions
-    #write_genes_pos(args.predicted_genes_file, probable_genes)
-    #write_genes(args.fasta_file, sequence, probable_genes, sequence_rc, probable_genes_comp)
+    write_genes_pos(args.predicted_genes_file, probable_genes)
+    write_genes(args.fasta_file, sequence, probable_genes, sequence_rc, probable_genes_comp_corrected)
 
 
 
