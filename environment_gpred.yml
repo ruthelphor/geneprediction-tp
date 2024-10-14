@@ -1,0 +1,7 @@
+name: gpred
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - pytest
+
