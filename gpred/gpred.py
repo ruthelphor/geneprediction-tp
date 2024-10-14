@@ -78,12 +78,11 @@ def find_start(start_regex: Pattern, sequence: str, start: int, stop: int) -> Un
     :param stop: (int) Stop position of the research
     :return: (int) If exist, position of the start codon. Otherwise None. 
     """
-    Union = regexp_object.search(sequence, [start, [stop]]
-    if Union = None:
-        return None
+    match_object = start_regex.search(sequence, start, stop)
+    if match_object:
+        return Union.start(0)
     else:
-        return Union
-    
+        return None    
 
 
 
@@ -95,7 +94,15 @@ def find_stop(stop_regex: Pattern, sequence: str, start: int) -> Union[int, None
     :param start: (int) Start position of the research
     :return: (int) If exist, position of the stop codon. Otherwise None. 
     """
-    pass
+    match_object = stop_regex.search(sequence, start)
+    while match_object:
+        stop_pos = match_object.start(0)
+        if (stop_pos - start) % 3 == 0:
+            return stop_pos
+
+        match_object = stop_regex.search(sequence, stop_pos + 1)
+    
+    return None
 
 
 def has_shine_dalgarno(shine_regex: Pattern, sequence: str, start: int, max_shine_dalgarno_distance: int) -> bool:
@@ -107,7 +114,19 @@ def has_shine_dalgarno(shine_regex: Pattern, sequence: str, start: int, max_shin
     :param max_shine_dalgarno_distance: (int) Maximum distance of the shine dalgarno to the start position
     :return: (boolean) true -> has a shine dalgarno upstream to the gene, false -> no
     """
-    pass
+    # Define the search range: from (start - max_shine_dalgarno_distance) to (start - 6)
+    search_start = start - max_shine_dalgarno_distance
+    search_stop = start - 6
+
+    # If the start position for searching is negative, return False
+    if search_start < 0:
+        return False
+
+    # Search for the Shine-Dalgarno motif in the defined region
+    match_object = shine_regex.search(sequence, search_start, search_stop)
+    
+    # Return True if a match is found, otherwise return False
+    return match_object is not None
 
 
 def predict_genes(sequence: str, start_regex: Pattern, stop_regex: Pattern, shine_regex: Pattern, 
